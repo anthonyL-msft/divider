@@ -44,6 +44,18 @@ describe("distributeItem", () => {
     expect(result.allocations.reduce((sum, entry) => sum + entry.amount, 0)).toBe(20);
   });
 
+  it("keeps written quantities fixed and gives leftovers to flexible sharers", () => {
+    const fixedRequest = { ...request("1", "judy", 5), fixed: true };
+    const result = distributeItem(pieceItem, [
+      fixedRequest,
+      request("2", "anthony"),
+      request("3", "ring"),
+    ]);
+
+    expect(result.allocations.find((entry) => entry.memberId === "judy")?.amount).toBe(5);
+    expect(result.allocations.reduce((sum, entry) => sum + entry.amount, 0)).toBe(10);
+  });
+
   it("keeps every portion share at or above one quarter", () => {
     const portionItem: MenuItem = {
       ...pieceItem,

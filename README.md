@@ -21,6 +21,14 @@ npm run dev
 
 資料儲存在瀏覽器 `localStorage`，不需要後端。首次載入會匯入 `groupbuy-001` 的目前訂單草稿。
 
+分享連結預設為唯讀；輸入編輯密碼才可修改。請在 `.env.local` 設定：
+
+```bash
+NEXT_PUBLIC_EDIT_PASSWORD=你的密碼
+```
+
+未設定時的開發密碼為 `divider2026`。這是前端防誤改機制；需要真正的存取控制時，應改用後端登入與資料庫權限。
+
 ## 驗證
 
 ```bash

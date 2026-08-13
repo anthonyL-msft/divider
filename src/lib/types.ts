@@ -23,6 +23,7 @@ export type OrderRequest = {
   itemId: string;
   mode: "share" | "whole" | "undecided";
   minimum?: number;
+  fixed?: boolean;
   quantity?: number;
   flavor?: string;
   note?: string;

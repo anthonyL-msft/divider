@@ -5,8 +5,12 @@ import {
   ChevronDown,
   ChevronUp,
   CircleDollarSign,
+  ClipboardCopy,
   ClipboardList,
+  FileUp,
+  KeyRound,
   Lock,
+  LogOut,
   Menu as MenuIcon,
   Minus,
   Plus,
@@ -14,14 +18,17 @@ import {
   Search,
   Trash2,
   Users,
+  X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { distributeItem } from "@/lib/distribution";
+import { parseOrderMessage } from "@/lib/import-order";
 import { menu, menuById } from "@/lib/menu";
 import { seedGroupBuy } from "@/lib/seed";
 import type { GroupBuy, MenuItem, OrderRequest } from "@/lib/types";
 
-const STORAGE_KEY = "divider-groupbuys-v1";
+const STORAGE_KEY = "divider-groupbuys-v2";
+const EDIT_PASSWORD = process.env.NEXT_PUBLIC_EDIT_PASSWORD ?? "divider2026";
 const money = new Intl.NumberFormat("zh-HK", {
   style: "currency",
   currency: "CAD",
@@ -71,6 +78,13 @@ export function OrderApp() {
   const [newMemberName, setNewMemberName] = useState("");
   const [menuMemberId, setMenuMemberId] = useState(seedGroupBuy.members[0].id);
   const [hydrated, setHydrated] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [password, setPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [copied, setCopied] = useState<"message" | "link" | null>(null);
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -87,6 +101,7 @@ export function OrderApp() {
           window.localStorage.removeItem(STORAGE_KEY);
         }
       }
+      setIsEditing(window.sessionStorage.getItem("divider-editing") === "true");
       setHydrated(true);
     });
   }, []);
@@ -121,8 +136,13 @@ export function OrderApp() {
       memberTotals.set(entry.memberId, (memberTotals.get(entry.memberId) ?? 0) + entry.cost),
     ),
   );
+  const editDisabled = !isEditing || groupBuy.status === "closed";
+  const importPreview = importText.trim()
+    ? parseOrderMessage(importText, groupBuy)
+    : null;
 
   function updateGroup(updater: (group: GroupBuy) => GroupBuy) {
+    if (!isEditing) return;
     setGroupBuys((current) =>
       current.map((group) =>
         group.id === activeId
@@ -142,7 +162,7 @@ export function OrderApp() {
   }
 
   function addRequest(itemId: string, memberId = menuMemberId) {
-    if (!memberId || groupBuy.status === "closed") return;
+    if (!memberId || editDisabled) return;
     const existing = groupBuy.requests.find(
       (request) => request.itemId === itemId && request.memberId === memberId,
     );
@@ -167,7 +187,7 @@ export function OrderApp() {
 
   function addMember() {
     const name = newMemberName.trim();
-    if (!name || groupBuy.status === "closed") return;
+    if (!name || editDisabled) return;
     const id = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "member"}-${Date.now()}`;
     updateGroup((group) => ({ ...group, members: [...group.members, { id, name }] }));
     setNewMemberName("");
@@ -175,6 +195,7 @@ export function OrderApp() {
   }
 
   function createGroupBuy() {
+    if (!isEditing) return;
     const sequence = String(groupBuys.length + 1).padStart(3, "0");
     const id = `groupbuy-${sequence}`;
     const next: GroupBuy = {
@@ -192,9 +213,69 @@ export function OrderApp() {
   }
 
   function resetSeed() {
+    if (!isEditing) return;
     if (!window.confirm("確定以原始名單重設 groupbuy-001？現有修改將會被取代。")) return;
     setGroupBuys((current) => [seedGroupBuy, ...current.filter((group) => group.id !== seedGroupBuy.id)]);
     setActiveId(seedGroupBuy.id);
+  }
+
+  function unlockEditing() {
+    if (password !== EDIT_PASSWORD) {
+      setPasswordError("密碼不正確");
+      return;
+    }
+    window.sessionStorage.setItem("divider-editing", "true");
+    setIsEditing(true);
+    setPassword("");
+    setPasswordError("");
+    setLoginOpen(false);
+  }
+
+  function lockEditing() {
+    window.sessionStorage.removeItem("divider-editing");
+    setIsEditing(false);
+  }
+
+  function applyImport() {
+    if (!importPreview || importPreview.members.length === 0 || importPreview.requests.length === 0) return;
+    updateGroup((group) => ({
+      ...group,
+      members: importPreview.members,
+      requests: importPreview.requests,
+      status: "draft",
+    }));
+    setMenuMemberId(importPreview.members[0]?.id ?? "");
+    setImportOpen(false);
+    setImportText("");
+    setView("items");
+  }
+
+  function memberAllocations(memberId: string) {
+    return allocations.flatMap((allocation) => {
+      const item = menuById.get(allocation.itemId);
+      const entry = allocation.allocations.find((candidate) => candidate.memberId === memberId);
+      return item && entry ? [{ item, entry }] : [];
+    });
+  }
+
+  async function copySettlementMessage() {
+    const lines = [`${groupBuy.name}（${groupBuy.id}）`, ""];
+    groupBuy.members.forEach((member) => {
+      lines.push(member.name);
+      memberAllocations(member.id).forEach(({ item, entry }) => {
+        lines.push(`• ${item.name}：${amountLabel(item, entry.amount)}（${money.format(entry.cost)}）`);
+      });
+      lines.push(`合計：${money.format(memberTotals.get(member.id) ?? 0)}`, "");
+    });
+    await navigator.clipboard.writeText(lines.join("\n").trim());
+    setCopied("message");
+    window.setTimeout(() => setCopied(null), 1800);
+  }
+
+  async function copyShareLink() {
+    await navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}`);
+    setCopied("link");
+    window.setTimeout(() => setCopied(null), 1800);
   }
 
   const filteredAllocations = allocations.filter((allocation) => {
@@ -239,15 +320,18 @@ export function OrderApp() {
             </span>
           </div>
           <div className="top-actions">
-            <button className="icon-button" title="以原始名單重設" onClick={resetSeed}><RotateCcw size={18} /></button>
-            <button className="secondary-button" onClick={createGroupBuy}><Plus size={17} /> 新團購</button>
-            <button
-              className="primary-button"
-              onClick={() => updateGroup((group) => ({ ...group, status: group.status === "draft" ? "closed" : "draft" }))}
-            >
-              {groupBuy.status === "draft" ? <Lock size={17} /> : <RotateCcw size={17} />}
-              {groupBuy.status === "draft" ? "截單" : "重新開啟"}
-            </button>
+            <button className="icon-button" title={copied === "link" ? "已複製" : "複製分享連結"} onClick={copyShareLink}><ClipboardCopy size={18} /></button>
+            <button className="secondary-button copy-message" onClick={copySettlementMessage}><ClipboardCopy size={17} /> {copied === "message" ? "已複製" : "複製結算"}</button>
+            {isEditing ? <>
+              <button className="icon-button edit-only-action" title="以原始名單重設" onClick={resetSeed}><RotateCcw size={18} /></button>
+              <button className="secondary-button edit-only-action" onClick={() => setImportOpen(true)}><FileUp size={17} /> 匯入訊息</button>
+              <button className="secondary-button edit-only-action" onClick={createGroupBuy}><Plus size={17} /> 新團購</button>
+              <button className="primary-button" onClick={() => updateGroup((group) => ({ ...group, status: group.status === "draft" ? "closed" : "draft" }))}>
+                {groupBuy.status === "draft" ? <Lock size={17} /> : <RotateCcw size={17} />}
+                {groupBuy.status === "draft" ? "截單" : "重開"}
+              </button>
+              <button className="icon-button" title="離開編輯" onClick={lockEditing}><LogOut size={18} /></button>
+            </> : <button className="primary-button" onClick={() => setLoginOpen(true)}><KeyRound size={17} /> 登入編輯</button>}
           </div>
         </header>
 
@@ -258,7 +342,7 @@ export function OrderApp() {
               <h1>{groupBuy.name}</h1>
               <p>按實際分量計算每人費用，尾數會分配給其中一位成員。</p>
             </div>
-            <div className="save-state"><Check size={16} /> {hydrated ? "已自動儲存" : "正在載入"}</div>
+            <div className={isEditing ? "save-state" : "save-state readonly"}>{isEditing ? <Check size={16} /> : <Lock size={16} />} {isEditing ? (hydrated ? "編輯模式 · 已儲存" : "正在載入") : "唯讀模式"}</div>
           </section>
 
           <section className="metrics" aria-label="團購摘要">
@@ -303,27 +387,27 @@ export function OrderApp() {
                                 <div className={request.mode === "undecided" ? "allocation-row pending" : "allocation-row"} key={request.id}>
                                   <span className="avatar">{initials(memberById.get(request.memberId)?.name ?? "?")}</span>
                                   <div className="member-result"><strong>{memberById.get(request.memberId)?.name}</strong><small>{result ? `${amountLabel(item, result.amount)} · ${money.format(result.cost)}` : "待確認"}{request.flavor ? ` · ${request.flavor}` : ""}</small>{request.note && <em>{request.note}</em>}</div>
-                                  <select value={request.mode} disabled={groupBuy.status === "closed"} onChange={(event) => updateRequest(request.id, { mode: event.target.value as OrderRequest["mode"] })}>
+                                  <select value={request.mode} disabled={editDisabled} onChange={(event) => updateRequest(request.id, { mode: event.target.value as OrderRequest["mode"] })}>
                                     <option value="share">Share</option><option value="whole">全份</option><option value="undecided">待確認</option>
                                   </select>
                                   {request.mode === "share" && (
                                     <div className="stepper">
-                                      <button title="減少最低份量" disabled={groupBuy.status === "closed" || minimum <= step} onClick={() => updateRequest(request.id, { minimum: Math.max(step, minimum - step) })}><Minus size={15} /></button>
-                                      <span>最少 {amountLabel(item, minimum)}</span>
-                                      <button title="增加最低份量" disabled={groupBuy.status === "closed"} onClick={() => updateRequest(request.id, { minimum: minimum + step })}><Plus size={15} /></button>
+                                      <button title="減少固定份量" disabled={editDisabled || minimum <= step} onClick={() => updateRequest(request.id, { minimum: Math.max(step, minimum - step), fixed: true })}><Minus size={15} /></button>
+                                      <span>{request.fixed ? "固定" : "最少"} {amountLabel(item, minimum)}</span>
+                                      <button title="增加固定份量" disabled={editDisabled} onClick={() => updateRequest(request.id, { minimum: minimum + step, fixed: true })}><Plus size={15} /></button>
                                     </div>
                                   )}
                                   {request.mode === "whole" && <span className="whole-label">{request.quantity ?? 1} {item.packageLabel}</span>}
-                                  <button className="delete-button" title="移除此人的品項" disabled={groupBuy.status === "closed"} onClick={() => updateGroup((group) => ({ ...group, requests: group.requests.filter((entry) => entry.id !== request.id) }))}><Trash2 size={16} /></button>
+                                  <button className="delete-button" title="移除此人的品項" disabled={editDisabled} onClick={() => updateGroup((group) => ({ ...group, requests: group.requests.filter((entry) => entry.id !== request.id) }))}><Trash2 size={16} /></button>
                                 </div>
                               );
                             })}
                           </div>
                           <div className="add-participant">
-                            <select value={menuMemberId} onChange={(event) => setMenuMemberId(event.target.value)} disabled={groupBuy.status === "closed"}>
+                            <select value={menuMemberId} onChange={(event) => setMenuMemberId(event.target.value)} disabled={editDisabled}>
                               {groupBuy.members.filter((member) => !requests.some((request) => request.memberId === member.id)).map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
                             </select>
-                            <button className="secondary-button" disabled={groupBuy.status === "closed" || groupBuy.members.every((member) => requests.some((request) => request.memberId === member.id))} onClick={() => addRequest(item.id)}><Plus size={16} /> 加入 Share</button>
+                            <button className="secondary-button" disabled={editDisabled || groupBuy.members.every((member) => requests.some((request) => request.memberId === member.id))} onClick={() => addRequest(item.id)}><Plus size={16} /> 加入 Share</button>
                           </div>
                         </div>
                       )}
@@ -338,13 +422,14 @@ export function OrderApp() {
             <section className="panel">
               <div className="panel-header"><div><h2>成員</h2><p>管理今次團購的參與者及查看個人小計。</p></div></div>
               <form className="add-member" onSubmit={(event) => { event.preventDefault(); addMember(); }}>
-                <input value={newMemberName} onChange={(event) => setNewMemberName(event.target.value)} placeholder="輸入成員名稱" disabled={groupBuy.status === "closed"} />
-                <button className="primary-button" disabled={!newMemberName.trim() || groupBuy.status === "closed"}><Plus size={17} /> 新增成員</button>
+                <input value={newMemberName} onChange={(event) => setNewMemberName(event.target.value)} placeholder="輸入成員名稱" disabled={editDisabled} />
+                <button className="primary-button" disabled={!newMemberName.trim() || editDisabled}><Plus size={17} /> 新增成員</button>
               </form>
               <div className="member-grid">
                 {groupBuy.members.map((member) => {
                   const count = groupBuy.requests.filter((request) => request.memberId === member.id).length;
-                  return <article className="member-card" key={member.id}><div className="member-card-head"><span className="large-avatar">{initials(member.name)}</span><div><h3>{member.name}</h3><p>{member.note ?? "未有交收備註"}</p></div><button className="delete-button" title="刪除成員" disabled={groupBuy.status === "closed"} onClick={() => updateGroup((group) => ({ ...group, members: group.members.filter((entry) => entry.id !== member.id), requests: group.requests.filter((request) => request.memberId !== member.id) }))}><Trash2 size={16} /></button></div><div className="member-card-total"><span>{count} 個品項</span><strong>{money.format(memberTotals.get(member.id) ?? 0)}</strong></div></article>;
+                  const details = memberAllocations(member.id);
+                  return <article className="member-card" key={member.id}><div className="member-card-head"><span className="large-avatar">{initials(member.name)}</span><div><h3>{member.name}</h3><p>{member.note ?? "未有交收備註"}</p></div><button className="delete-button" title="刪除成員" disabled={editDisabled} onClick={() => updateGroup((group) => ({ ...group, members: group.members.filter((entry) => entry.id !== member.id), requests: group.requests.filter((request) => request.memberId !== member.id) }))}><Trash2 size={16} /></button></div><ul className="member-order-list">{details.map(({ item, entry }) => <li key={item.id}><span><strong>{item.name}</strong><small>{amountLabel(item, entry.amount)}</small></span><b>{money.format(entry.cost)}</b></li>)}</ul><div className="member-card-total"><span>{count} 個品項</span><strong>{money.format(memberTotals.get(member.id) ?? 0)}</strong></div></article>;
                 })}
               </div>
             </section>
@@ -354,12 +439,16 @@ export function OrderApp() {
             <section className="panel">
               <div className="panel-header menu-header"><div><h2>菜單</h2><p>選擇成員，再把品項加入其 Share 清單。</p></div><label><span>為誰加單</span><select value={menuMemberId} onChange={(event) => setMenuMemberId(event.target.value)}>{groupBuy.members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label></div>
               {[...new Set(menu.map((item) => item.category))].map((category) => (
-                <div className="menu-category" key={category}><h3>{category}</h3><div className="menu-grid">{menu.filter((item) => item.category === category).map((item) => { const added = groupBuy.requests.some((request) => request.itemId === item.id && request.memberId === menuMemberId); return <article className="menu-item" key={item.id}><div><strong>{item.name}</strong><small>{item.detail}</small></div><span>{money.format(item.price)}／{item.unitKind === "piece" ? `${item.piecesPerPackage}個` : item.packageLabel}</span><button className={added ? "added-button" : "icon-button"} title={added ? "已加入" : "加入 Share"} disabled={added || groupBuy.status === "closed" || !menuMemberId} onClick={() => addRequest(item.id)}>{added ? <Check size={17} /> : <Plus size={17} />}</button></article>; })}</div></div>
+                <div className="menu-category" key={category}><h3>{category}</h3><div className="menu-grid">{menu.filter((item) => item.category === category).map((item) => { const added = groupBuy.requests.some((request) => request.itemId === item.id && request.memberId === menuMemberId); return <article className="menu-item" key={item.id}><div><strong>{item.name}</strong><small>{item.detail}</small></div><span>{money.format(item.price)}／{item.unitKind === "piece" ? `${item.piecesPerPackage}個` : item.packageLabel}</span><button className={added ? "added-button" : "icon-button"} title={added ? "已加入" : "加入 Share"} disabled={added || editDisabled || !menuMemberId} onClick={() => addRequest(item.id)}>{added ? <Check size={17} /> : <Plus size={17} />}</button></article>; })}</div></div>
               ))}
             </section>
           )}
         </main>
       </div>
+
+      {loginOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => setLoginOpen(false)}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="login-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" title="關閉" onClick={() => setLoginOpen(false)}><X size={18} /></button><div className="modal-icon"><KeyRound size={22} /></div><h2 id="login-title">登入編輯模式</h2><p>查看連結預設為唯讀。輸入編輯密碼後，這個分頁才可修改訂單。</p><form onSubmit={(event) => { event.preventDefault(); unlockEditing(); }}><label><span>編輯密碼</span><input type="password" value={password} autoFocus onChange={(event) => { setPassword(event.target.value); setPasswordError(""); }} placeholder="輸入密碼" /></label>{passwordError && <div className="form-error">{passwordError}</div>}<button className="primary-button" type="submit"><KeyRound size={17} /> 解鎖編輯</button></form></section></div>}
+
+      {importOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => setImportOpen(false)}><section className="modal import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" title="關閉" onClick={() => setImportOpen(false)}><X size={18} /></button><div className="modal-icon"><FileUp size={22} /></div><h2 id="import-title">貼上訂單訊息</h2><p>系統會辨認成員、菜單別名、Share、全份及固定數量。確認後會取代目前團購內容。</p><textarea value={importText} autoFocus onChange={(event) => setImportText(event.target.value)} placeholder="在此貼上 WhatsApp 或群組訂單訊息…" />{importPreview && <div className="import-preview"><div><strong>{importPreview.members.length}</strong><span>位成員</span></div><div><strong>{importPreview.requests.length}</strong><span>個要求</span></div><div className={importPreview.unmatchedLines.length ? "has-warning" : ""}><strong>{importPreview.unmatchedLines.length}</strong><span>行未辨認</span></div></div>}{importPreview && importPreview.unmatchedLines.length > 0 && <details className="unmatched"><summary>查看未辨認內容</summary>{importPreview.unmatchedLines.map((line, index) => <div key={`${line}-${index}`}>{line}</div>)}</details>}<div className="modal-actions"><button className="secondary-button" onClick={() => setImportOpen(false)}>取消</button><button className="primary-button" disabled={!importPreview || importPreview.members.length === 0 || importPreview.requests.length === 0} onClick={applyImport}><FileUp size={17} /> 匯入並更新</button></div></section></div>}
     </div>
   );
 }

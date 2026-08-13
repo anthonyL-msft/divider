@@ -28,7 +28,7 @@ const pieces = (
 });
 
 export const menu: MenuItem[] = [
-  portion("pandan-layer-cake", "廣式蒸糕", "斑斕椰汁千層糕", 10, "盒"),
+  pieces("pandan-layer-cake", "廣式蒸糕", "斑斕椰汁千層糕", 10, 10, "每盒10件"),
   portion("brown-sugar-layer-cake", "廣式蒸糕", "黑糖椰汁千層糕", 10, "盒"),
   portion("jujube-ginger-layer-cake", "廣式蒸糕", "紅棗薑汁千層糕", 10, "盒"),
   portion("thai-tea-layer-cake", "廣式蒸糕", "泰式奶茶千層糕", 10, "盒"),
