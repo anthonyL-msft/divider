@@ -36,6 +36,8 @@ import {
 import type { GroupBuy, MenuItem, OrderRequest } from "@/lib/types";
 
 const STORAGE_KEY = "divider-groupbuys-v2";
+const DEFAULT_SHARED_GROUP_ID = "groupbuy-001";
+const DEFAULT_SHARE_TOKEN = "a5d9785b-8ead-4ea2-a729-519167560ce4";
 const money = new Intl.NumberFormat("zh-HK", {
   style: "currency",
   currency: "CAD",
@@ -146,7 +148,9 @@ export function OrderApp() {
             if (cloudGroups.length > 0) localGroups = cloudGroups;
             setSyncState("saved");
           } else {
-            setSyncState("local");
+            const shared = await loadSharedGroupBuy(DEFAULT_SHARED_GROUP_ID, DEFAULT_SHARE_TOKEN);
+            if (shared) localGroups = [shared];
+            setSyncState(shared ? "saved" : "local");
           }
         } else {
           setSyncState("local");
@@ -167,11 +171,10 @@ export function OrderApp() {
   }, [groupBuys, hydrated]);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || userId) return;
     const params = new URLSearchParams(window.location.search);
-    const sharedId = params.get("group");
-    const shareToken = params.get("token");
-    if (!sharedId || !shareToken) return;
+    const sharedId = params.get("group") ?? DEFAULT_SHARED_GROUP_ID;
+    const shareToken = params.get("token") ?? DEFAULT_SHARE_TOKEN;
 
     const refreshSharedGroup = async () => {
       try {
@@ -198,7 +201,7 @@ export function OrderApp() {
       window.removeEventListener("focus", refreshOnFocus);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
-  }, [hydrated]);
+  }, [hydrated, userId]);
 
   useEffect(() => {
     if (!hydrated || !userId) return;
