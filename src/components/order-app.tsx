@@ -149,7 +149,13 @@ export function OrderApp() {
             setSyncState("saved");
           } else {
             const shared = await loadSharedGroupBuy(DEFAULT_SHARED_GROUP_ID, DEFAULT_SHARE_TOKEN);
-            if (shared) localGroups = [shared];
+            if (shared) {
+              localGroups = [shared];
+              const sharedUrl = new URL(window.location.href);
+              sharedUrl.searchParams.set("group", shared.id);
+              sharedUrl.searchParams.set("token", shared.shareToken ?? DEFAULT_SHARE_TOKEN);
+              window.history.replaceState(null, "", sharedUrl);
+            }
             setSyncState(shared ? "saved" : "local");
           }
         } else {
