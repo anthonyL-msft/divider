@@ -78,4 +78,15 @@ Michelle
       { memberId: "michelle", itemId: "sa-yung", mode: "share", minimum: undefined, fixed: false },
     ]);
   });
+
+  it("keeps a parenthesized whole-order instruction as the member note", () => {
+    const result = parseOrderMessage(`
+Alvin Leung
+（不用share, 全份）
+红枣姜汁千层糕 $10
+`, seedGroupBuy);
+
+    expect(result.members[0].note).toBe("不用share, 全份");
+    expect(result.requests[0].mode).toBe("whole");
+  });
 });

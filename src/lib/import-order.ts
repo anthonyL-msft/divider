@@ -105,6 +105,7 @@ export function parseOrderMessage(text: string, current: GroupBuy): ImportResult
     }
     if (/全份/.test(line) && !findItemId(line)) {
       wholeSection = true;
+      if (/^[（(].*[）)]$/.test(line)) activeMember.note = line.slice(1, -1);
       continue;
     }
     if (/全部可以\s*share|can\s*share/i.test(line)) {
