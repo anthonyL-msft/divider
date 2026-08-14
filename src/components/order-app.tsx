@@ -357,7 +357,8 @@ export function OrderApp() {
     return allocations.flatMap((allocation) => {
       const item = menuById.get(allocation.itemId);
       const entry = allocation.allocations.find((candidate) => candidate.memberId === memberId);
-      return item && entry ? [{ item, entry }] : [];
+      const request = groupBuy.requests.find((candidate) => candidate.itemId === allocation.itemId && candidate.memberId === memberId);
+      return item && entry && request ? [{ item, entry, request }] : [];
     });
   }
 
@@ -365,8 +366,8 @@ export function OrderApp() {
     const lines = [`${groupBuy.name}（${groupBuy.id}）`, ""];
     groupBuy.members.forEach((member) => {
       lines.push(member.name);
-      memberAllocations(member.id).forEach(({ item, entry }) => {
-        lines.push(`• ${item.name}：${amountLabel(item, entry.amount)}（${money.format(entry.cost)}）`);
+      memberAllocations(member.id).forEach(({ item, entry, request }) => {
+        lines.push(`• ${item.name}：${amountLabel(item, entry.amount)}${request.flavor ? ` · ${request.flavor}` : ""}（${money.format(entry.cost)}）`);
       });
       lines.push(`合計：${money.format(memberTotals.get(member.id) ?? 0)}`, "");
     });
@@ -551,7 +552,7 @@ export function OrderApp() {
                 {groupBuy.members.map((member) => {
                   const count = groupBuy.requests.filter((request) => request.memberId === member.id).length;
                   const details = memberAllocations(member.id);
-                  return <article className="member-card" key={member.id}><div className="member-card-head"><span className="large-avatar">{initials(member.name)}</span><div><h3>{member.name}</h3><p>{member.note ?? "未有交收備註"}</p></div><button className="delete-button" title="刪除成員" disabled={editDisabled} onClick={() => updateGroup((group) => ({ ...group, members: group.members.filter((entry) => entry.id !== member.id), requests: group.requests.filter((request) => request.memberId !== member.id) }))}><Trash2 size={16} /></button></div><ul className="member-order-list">{details.map(({ item, entry }) => <li key={item.id}><span><strong>{item.name}</strong><small>{amountLabel(item, entry.amount)}</small></span><b>{money.format(entry.cost)}</b></li>)}</ul><div className="member-card-total"><span>{count} 個品項</span><strong>{money.format(memberTotals.get(member.id) ?? 0)}</strong></div></article>;
+                  return <article className="member-card" key={member.id}><div className="member-card-head"><span className="large-avatar">{initials(member.name)}</span><div><h3>{member.name}</h3><p>{member.note ?? "未有交收備註"}</p></div><button className="delete-button" title="刪除成員" disabled={editDisabled} onClick={() => updateGroup((group) => ({ ...group, members: group.members.filter((entry) => entry.id !== member.id), requests: group.requests.filter((request) => request.memberId !== member.id) }))}><Trash2 size={16} /></button></div><ul className="member-order-list">{details.map(({ item, entry, request }) => <li key={item.id}><span><strong>{item.name}</strong><small>{amountLabel(item, entry.amount)}{request.flavor ? ` · ${request.flavor}` : ""}</small></span><b>{money.format(entry.cost)}</b></li>)}</ul><div className="member-card-total"><span>{count} 個品項</span><strong>{money.format(memberTotals.get(member.id) ?? 0)}</strong></div></article>;
                 })}
               </div>
             </section>
