@@ -89,4 +89,20 @@ Alvin Leung
     expect(result.members[0].note).toBe("不用share, 全份");
     expect(result.requests[0].mode).toBe("whole");
   });
+
+  it("creates separate SKUs for each Hakka mochi flavor", () => {
+    const result = parseOrderMessage(`
+Anthony
+糯米糍（芋泥？花生芝麻？）(share) $10/8個
+Judy
+海苔肉鬆糯米糍 (Share) 想要2個
+`, seedGroupBuy);
+
+    expect(result.requests.map((request) => request.itemId)).toEqual([
+      "hakka-mochi-peanut-sesame",
+      "hakka-mochi-taro",
+      "hakka-mochi-seaweed-pork-floss",
+    ]);
+    expect(result.requests.every((request) => request.flavor === undefined)).toBe(true);
+  });
 });

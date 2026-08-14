@@ -11,7 +11,7 @@ const itemAliases: Array<[string, string[]]> = [
   ["chocolate-mochi", ["朱古力榛子糯米糍", "巧克力榛子糯米糍"]],
   ["pistachio-mochi", ["開心果糯米糍", "开心果糯米糍"]],
   ["nut-mochi", ["堅果糯米糍", "坚果糯米糍"]],
-  ["hakka-mochi", ["海苔肉鬆糯米糍", "海苔肉松糯米糍", "糯米糍", "艾糍"]],
+  ["hakka-mochi-seaweed-pork-floss", ["海苔肉鬆糯米糍", "海苔肉松糯米糍"]],
   ["ham-sui-gok", ["家鄉珍珠鹹水角", "家乡珍珠咸水角", "鹹水角", "咸水角"]],
   ["sa-yung", ["糖沙翁", "沙翁", "蛋球"]],
   ["pandan-layer-cake", ["斑斕椰汁千層糕", "斑斓椰汁千层糕", "斑斕椰汁糕", "斑斓椰汁糕"]],
@@ -42,6 +42,24 @@ function findItemId(line: string) {
   return itemAliases.find(([, aliases]) =>
     aliases.some((alias) => normalized.includes(clean(alias))),
   )?.[0];
+}
+
+function findItemIds(line: string) {
+  const normalized = clean(line);
+  if (normalized.includes("糯米糍") || normalized.includes("艾糍")) {
+    const flavorItems = [
+      ["hakka-mochi-peanut-sesame", ["花生芝麻"]],
+      ["hakka-mochi-taro", ["芋泥"]],
+      ["hakka-mochi-red-bean", ["紅豆", "红豆"]],
+      ["hakka-mochi-seaweed-pork-floss", ["海苔肉鬆", "海苔肉松"]],
+    ] as const;
+    const matches = flavorItems
+      .filter(([, flavors]) => flavors.some((flavor) => normalized.includes(clean(flavor))))
+      .map(([itemId]) => itemId);
+    if (matches.length > 0) return matches;
+  }
+  const itemId = findItemId(line);
+  return itemId ? [itemId] : [];
 }
 
 function slug(name: string) {
@@ -83,7 +101,7 @@ export function parseOrderMessage(text: string, current: GroupBuy): ImportResult
     const knownMember = knownMembers.find((member) =>
       line.toLowerCase().startsWith(member.name.toLowerCase()),
     );
-    const newMemberHeading = !findItemId(line) && /^[A-Za-z][A-Za-z ]+(?:[（(].*[）)])?$/.test(line);
+    const newMemberHeading = findItemIds(line).length === 0 && /^[A-Za-z][A-Za-z ]+(?:[（(].*[）)])?$/.test(line);
     if (knownMember || newMemberHeading) {
       const name = knownMember?.name ?? line.replace(/[（(].*$/, "").trim();
       activeMember = members.find((member) => member.name.toLowerCase() === name.toLowerCase()) ?? {
@@ -117,24 +135,27 @@ export function parseOrderMessage(text: string, current: GroupBuy): ImportResult
       continue;
     }
 
-    const itemId = findItemId(line);
-    if (!itemId) {
+    const itemIds = findItemIds(line);
+    if (itemIds.length === 0) {
       unmatchedLines.push(line);
       continue;
     }
-    const amount = fixedAmount(line, itemId);
-    const share = /share|可\s*share|可獨食|可独食/i.test(line) || defaultShare || amount !== undefined;
-    const quantityMatch = line.match(/[x×]\s*([0-9]+)/i);
-    requests.push({
-      id: `import-${Date.now()}-${++requestIndex}`,
-      memberId: activeMember.id,
-      itemId,
-      mode: wholeSection || !share ? "whole" : "share",
-      minimum: amount,
-      fixed: amount !== undefined,
-      quantity: quantityMatch ? Number(quantityMatch[1]) : undefined,
-      flavor: flavorFrom(line),
-      note: /可\s*share|可獨食|可独食/i.test(line) ? "可 Share 或獨食" : undefined,
+    const activeMemberId = activeMember.id;
+    itemIds.forEach((itemId) => {
+      const amount = fixedAmount(line, itemId);
+      const share = /share|可\s*share|可獨食|可独食/i.test(line) || defaultShare || amount !== undefined;
+      const quantityMatch = line.match(/[x×]\s*([0-9]+)/i);
+      requests.push({
+        id: `import-${Date.now()}-${++requestIndex}`,
+        memberId: activeMemberId,
+        itemId,
+        mode: wholeSection || !share ? "whole" : "share",
+        minimum: amount,
+        fixed: amount !== undefined,
+        quantity: quantityMatch ? Number(quantityMatch[1]) : undefined,
+        flavor: itemId.startsWith("hakka-mochi-") ? undefined : flavorFrom(line),
+        note: /可\s*share|可獨食|可独食/i.test(line) ? "可 Share 或獨食" : undefined,
+      });
     });
   }
 
