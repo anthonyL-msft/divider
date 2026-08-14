@@ -31,6 +31,7 @@ export type OrderRequest = {
 
 export type GroupBuy = {
   id: string;
+  shareToken?: string;
   name: string;
   status: "draft" | "closed";
   members: Member[];

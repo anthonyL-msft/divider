@@ -20,15 +20,20 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { distributeItem } from "@/lib/distribution";
 import { parseOrderMessage } from "@/lib/import-order";
 import { menu, menuById } from "@/lib/menu";
 import { seedGroupBuy } from "@/lib/seed";
+import {
+  getSupabase,
+  loadOwnedGroupBuys,
+  loadSharedGroupBuy,
+  saveGroupBuy,
+} from "@/lib/supabase";
 import type { GroupBuy, MenuItem, OrderRequest } from "@/lib/types";
 
 const STORAGE_KEY = "divider-groupbuys-v2";
-const EDIT_PASSWORD = process.env.NEXT_PUBLIC_EDIT_PASSWORD ?? "divider2026";
 const money = new Intl.NumberFormat("zh-HK", {
   style: "currency",
   currency: "CAD",
@@ -79,29 +84,59 @@ export function OrderApp() {
   const [menuMemberId, setMenuMemberId] = useState(seedGroupBuy.members[0].id);
   const [hydrated, setHydrated] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
-  const [password, setPassword] = useState("");
-  const [passwordError, setPasswordError] = useState("");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authMessage, setAuthMessage] = useState("");
+  const [syncState, setSyncState] = useState<"local" | "loading" | "syncing" | "saved" | "error">("loading");
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState("");
   const [copied, setCopied] = useState<"message" | "link" | null>(null);
+  const lastCloudSnapshot = useRef("");
 
   useEffect(() => {
-    queueMicrotask(() => {
+    queueMicrotask(async () => {
+      const supabase = getSupabase();
       const saved = window.localStorage.getItem(STORAGE_KEY);
+      let localGroups = [seedGroupBuy];
       if (saved) {
         try {
           const parsed = JSON.parse(saved) as GroupBuy[];
-          if (parsed.length > 0) {
-            setGroupBuys(parsed);
-            setActiveId(parsed[0].id);
-            setMenuMemberId(parsed[0].members[0]?.id ?? "");
-          }
+          if (parsed.length > 0) localGroups = parsed;
         } catch {
           window.localStorage.removeItem(STORAGE_KEY);
         }
       }
-      setIsEditing(window.sessionStorage.getItem("divider-editing") === "true");
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const sharedId = params.get("group");
+        const shareToken = params.get("token");
+        if (sharedId && shareToken) {
+          const shared = await loadSharedGroupBuy(sharedId, shareToken);
+          if (!shared) throw new Error("找不到這張團購單，或分享連結無效。");
+          localGroups = [shared];
+          setSyncState("saved");
+        } else if (supabase) {
+          const { data } = await supabase.auth.getSession();
+          if (data.session?.user) {
+            setUserId(data.session.user.id);
+            setIsEditing(true);
+            const cloudGroups = await loadOwnedGroupBuys();
+            if (cloudGroups.length > 0) localGroups = cloudGroups;
+            setSyncState("saved");
+          } else {
+            setSyncState("local");
+          }
+        } else {
+          setSyncState("local");
+        }
+      } catch (error) {
+        setAuthMessage(error instanceof Error ? error.message : "無法讀取共享團購單");
+        setSyncState("error");
+      }
+      setGroupBuys(localGroups);
+      setActiveId(localGroups[0].id);
+      setMenuMemberId(localGroups[0].members[0]?.id ?? "");
       setHydrated(true);
     });
   }, []);
@@ -109,6 +144,37 @@ export function OrderApp() {
   useEffect(() => {
     if (hydrated) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(groupBuys));
   }, [groupBuys, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated || !userId) return;
+    const snapshot = JSON.stringify(groupBuys);
+    if (snapshot === lastCloudSnapshot.current) return;
+    lastCloudSnapshot.current = snapshot;
+    setSyncState("syncing");
+    const timeout = window.setTimeout(async () => {
+      try {
+        const results = await Promise.all(
+          groupBuys.map(async (group) => ({
+            id: group.id,
+            result: await saveGroupBuy(group, userId),
+          })),
+        );
+        setGroupBuys((current) =>
+          current.map((group) => {
+            const saved = results.find((entry) => entry.id === group.id);
+            return saved && group.shareToken !== saved.result.shareToken
+              ? { ...group, shareToken: saved.result.shareToken }
+              : group;
+          }),
+        );
+        setSyncState("saved");
+      } catch (error) {
+        setAuthMessage(error instanceof Error ? error.message : "同步失敗");
+        setSyncState("error");
+      }
+    }, 450);
+    return () => window.clearTimeout(timeout);
+  }, [groupBuys, hydrated, userId]);
 
   const groupBuy = groupBuys.find((group) => group.id === activeId) ?? groupBuys[0];
   const memberById = new Map(groupBuy.members.map((member) => [member.id, member]));
@@ -219,21 +285,25 @@ export function OrderApp() {
     setActiveId(seedGroupBuy.id);
   }
 
-  function unlockEditing() {
-    if (password !== EDIT_PASSWORD) {
-      setPasswordError("密碼不正確");
-      return;
-    }
-    window.sessionStorage.setItem("divider-editing", "true");
-    setIsEditing(true);
-    setPassword("");
-    setPasswordError("");
-    setLoginOpen(false);
+  async function sendMagicLink() {
+    const supabase = getSupabase();
+    if (!supabase || !authEmail.trim()) return;
+    setAuthMessage("正在傳送登入連結…");
+    const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+    const { error } = await supabase.auth.signInWithOtp({
+      email: authEmail.trim(),
+      options: {
+        emailRedirectTo: `${window.location.origin}${basePath}/auth/callback/`,
+      },
+    });
+    setAuthMessage(error ? `無法傳送：${error.message}` : "登入連結已寄出，請檢查電郵。");
   }
 
-  function lockEditing() {
-    window.sessionStorage.removeItem("divider-editing");
+  async function lockEditing() {
+    await getSupabase()?.auth.signOut();
+    setUserId(null);
     setIsEditing(false);
+    setSyncState("local");
   }
 
   function applyImport() {
@@ -273,7 +343,14 @@ export function OrderApp() {
   }
 
   async function copyShareLink() {
-    await navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}`);
+    if (!groupBuy.shareToken) {
+      setAuthMessage("團購單尚未完成雲端同步，請稍後再試。");
+      return;
+    }
+    const url = new URL(window.location.origin + window.location.pathname);
+    url.searchParams.set("group", groupBuy.id);
+    url.searchParams.set("token", groupBuy.shareToken);
+    await navigator.clipboard.writeText(url.toString());
     setCopied("link");
     window.setTimeout(() => setCopied(null), 1800);
   }
@@ -342,7 +419,7 @@ export function OrderApp() {
               <h1>{groupBuy.name}</h1>
               <p>按實際分量計算每人費用，尾數會分配給其中一位成員。</p>
             </div>
-            <div className={isEditing ? "save-state" : "save-state readonly"}>{isEditing ? <Check size={16} /> : <Lock size={16} />} {isEditing ? (hydrated ? "編輯模式 · 已儲存" : "正在載入") : "唯讀模式"}</div>
+            <div className={isEditing ? "save-state" : "save-state readonly"}>{isEditing ? <Check size={16} /> : <Lock size={16} />} {isEditing ? (syncState === "syncing" ? "正在同步…" : syncState === "error" ? "同步失敗" : "雲端已儲存") : syncState === "saved" ? "雲端唯讀" : "本機唯讀"}</div>
           </section>
 
           <section className="metrics" aria-label="團購摘要">
@@ -446,7 +523,7 @@ export function OrderApp() {
         </main>
       </div>
 
-      {loginOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => setLoginOpen(false)}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="login-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" title="關閉" onClick={() => setLoginOpen(false)}><X size={18} /></button><div className="modal-icon"><KeyRound size={22} /></div><h2 id="login-title">登入編輯模式</h2><p>查看連結預設為唯讀。輸入編輯密碼後，這個分頁才可修改訂單。</p><form onSubmit={(event) => { event.preventDefault(); unlockEditing(); }}><label><span>編輯密碼</span><input type="password" value={password} autoFocus onChange={(event) => { setPassword(event.target.value); setPasswordError(""); }} placeholder="輸入密碼" /></label>{passwordError && <div className="form-error">{passwordError}</div>}<button className="primary-button" type="submit"><KeyRound size={17} /> 解鎖編輯</button></form></section></div>}
+      {loginOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => setLoginOpen(false)}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="login-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" title="關閉" onClick={() => setLoginOpen(false)}><X size={18} /></button><div className="modal-icon"><KeyRound size={22} /></div><h2 id="login-title">登入編輯模式</h2><p>查看連結預設為唯讀。Supabase 會寄出一次性登入連結，只有登入的 organizer 可以修改訂單。</p><form onSubmit={(event) => { event.preventDefault(); void sendMagicLink(); }}><label><span>Organizer 電郵</span><input type="email" value={authEmail} autoFocus onChange={(event) => { setAuthEmail(event.target.value); setAuthMessage(""); }} placeholder="name@example.com" /></label>{authMessage && <div className="auth-message">{authMessage}</div>}<button className="primary-button" type="submit" disabled={!authEmail.trim()}><KeyRound size={17} /> 寄出登入連結</button></form></section></div>}
 
       {importOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => setImportOpen(false)}><section className="modal import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" title="關閉" onClick={() => setImportOpen(false)}><X size={18} /></button><div className="modal-icon"><FileUp size={22} /></div><h2 id="import-title">貼上訂單訊息</h2><p>系統會辨認成員、菜單別名、Share、全份及固定數量。確認後會取代目前團購內容。</p><textarea value={importText} autoFocus onChange={(event) => setImportText(event.target.value)} placeholder="在此貼上 WhatsApp 或群組訂單訊息…" />{importPreview && <div className="import-preview"><div><strong>{importPreview.members.length}</strong><span>位成員</span></div><div><strong>{importPreview.requests.length}</strong><span>個要求</span></div><div className={importPreview.unmatchedLines.length ? "has-warning" : ""}><strong>{importPreview.unmatchedLines.length}</strong><span>行未辨認</span></div></div>}{importPreview && importPreview.unmatchedLines.length > 0 && <details className="unmatched"><summary>查看未辨認內容</summary>{importPreview.unmatchedLines.map((line, index) => <div key={`${line}-${index}`}>{line}</div>)}</details>}<div className="modal-actions"><button className="secondary-button" onClick={() => setImportOpen(false)}>取消</button><button className="primary-button" disabled={!importPreview || importPreview.members.length === 0 || importPreview.requests.length === 0} onClick={applyImport}><FileUp size={17} /> 匯入並更新</button></div></section></div>}
     </div>

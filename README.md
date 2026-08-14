@@ -19,15 +19,30 @@ npm run dev
 
 開啟終端顯示的本機網址。開發伺服器通常使用 [http://localhost:3000](http://localhost:3000)。
 
-資料儲存在瀏覽器 `localStorage`，不需要後端。首次載入會匯入 `groupbuy-001` 的目前訂單草稿。
+正式資料同步至 Supabase，`localStorage` 作為本機 fallback。首次登入且雲端沒有資料時，會匯入 `groupbuy-001` 草稿。
 
-分享連結預設為唯讀；輸入編輯密碼才可修改。請在 `.env.local` 設定：
+請在 `.env.local` 設定：
 
 ```bash
-NEXT_PUBLIC_EDIT_PASSWORD=你的密碼
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 ```
 
-未設定時的開發密碼為 `divider2026`。這是前端防誤改機制；需要真正的存取控制時，應改用後端登入與資料庫權限。
+分享連結使用不可猜測的 token 並預設唯讀。Organizer 透過 Supabase Email OTP 登入，RLS 只允許 owner 修改自己的團購單。
+
+## GitHub Pages
+
+正式網址為 [https://anthonyl-msft.github.io/divider/](https://anthonyl-msft.github.io/divider/)。Repository 的 Actions secret 必須包含：
+
+```text
+SUPABASE_PUBLISHABLE_KEY
+```
+
+Supabase Authentication 的 Redirect URLs 必須加入：
+
+```text
+https://anthonyl-msft.github.io/divider/auth/callback/
+```
 
 ## 驗證
 
@@ -35,6 +50,20 @@ NEXT_PUBLIC_EDIT_PASSWORD=你的密碼
 npm run lint
 npm test
 npm run build
+```
+
+## GitHub Pages 部署
+
+推送至 `main` 後，[GitHub Actions](.github/workflows/deploy-pages.yml) 會自動建立並部署靜態網站。
+
+首次部署前，在 GitHub repository 開啟 **Settings → Pages**，將 **Source** 設為 **GitHub Actions**。工作流程完成後，網站位於：
+
+[https://anthonyl-msft.github.io/divider/](https://anthonyl-msft.github.io/divider/)
+
+本機模擬 GitHub Pages build：
+
+```bash
+GITHUB_PAGES=true npm run build
 ```
 
 技術棧：Next.js 16、React 19、TypeScript、Vitest。

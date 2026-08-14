@@ -864,6 +864,31 @@ h1 {
   font-size: 12px;
 }
 
+.auth-message {
+  padding: 10px 12px;
+  border: 1px solid var(--cp-border);
+  border-radius: 6px;
+  background: var(--cp-surface-soft);
+  color: var(--cp-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.auth-callback {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+}
+
+.auth-callback p {
+  padding: 20px 24px;
+  border: 1px solid var(--cp-border);
+  border-radius: 8px;
+  background: var(--cp-surface);
+  color: var(--cp-text-muted);
+}
+
 .import-modal textarea {
   width: 100%;
   min-height: 230px;
