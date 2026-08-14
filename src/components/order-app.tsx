@@ -87,6 +87,7 @@ export function OrderApp() {
   const [userId, setUserId] = useState<string | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
   const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
   const [authMessage, setAuthMessage] = useState("");
   const [syncState, setSyncState] = useState<"local" | "loading" | "syncing" | "saved" | "error">("loading");
   const [importOpen, setImportOpen] = useState(false);
@@ -297,6 +298,37 @@ export function OrderApp() {
       },
     });
     setAuthMessage(error ? `無法傳送：${error.message}` : "登入連結已寄出，請檢查電郵。");
+  }
+
+  async function signInWithPassword() {
+    const supabase = getSupabase();
+    if (!supabase || !authEmail.trim() || !authPassword) return;
+    setAuthMessage("正在登入…");
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: authEmail.trim(),
+      password: authPassword,
+    });
+    if (error || !data.user) {
+      setAuthMessage(`登入失敗：${error?.message ?? "沒有使用者資料"}`);
+      return;
+    }
+    setUserId(data.user.id);
+    setIsEditing(true);
+    setAuthPassword("");
+    setLoginOpen(false);
+    setSyncState("loading");
+    try {
+      const cloudGroups = await loadOwnedGroupBuys();
+      if (cloudGroups.length > 0) {
+        setGroupBuys(cloudGroups);
+        setActiveId(cloudGroups[0].id);
+        setMenuMemberId(cloudGroups[0].members[0]?.id ?? "");
+      }
+      setSyncState("saved");
+    } catch (loadError) {
+      setAuthMessage(loadError instanceof Error ? loadError.message : "無法載入雲端團購單");
+      setSyncState("error");
+    }
   }
 
   async function lockEditing() {
@@ -523,7 +555,7 @@ export function OrderApp() {
         </main>
       </div>
 
-      {loginOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => setLoginOpen(false)}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="login-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" title="關閉" onClick={() => setLoginOpen(false)}><X size={18} /></button><div className="modal-icon"><KeyRound size={22} /></div><h2 id="login-title">登入編輯模式</h2><p>查看連結預設為唯讀。Supabase 會寄出一次性登入連結，只有登入的 organizer 可以修改訂單。</p><form onSubmit={(event) => { event.preventDefault(); void sendMagicLink(); }}><label><span>Organizer 電郵</span><input type="email" value={authEmail} autoFocus onChange={(event) => { setAuthEmail(event.target.value); setAuthMessage(""); }} placeholder="name@example.com" /></label>{authMessage && <div className="auth-message">{authMessage}</div>}<button className="primary-button" type="submit" disabled={!authEmail.trim()}><KeyRound size={17} /> 寄出登入連結</button></form></section></div>}
+      {loginOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => setLoginOpen(false)}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="login-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" title="關閉" onClick={() => setLoginOpen(false)}><X size={18} /></button><div className="modal-icon"><KeyRound size={22} /></div><h2 id="login-title">登入編輯模式</h2><p>查看連結預設為唯讀。Organizer 可用 Supabase 帳戶登入，密碼不會儲存在 Divider。</p><form onSubmit={(event) => { event.preventDefault(); void signInWithPassword(); }}><label><span>Organizer 電郵</span><input type="email" value={authEmail} autoFocus onChange={(event) => { setAuthEmail(event.target.value); setAuthMessage(""); }} placeholder="name@example.com" /></label><label><span>密碼</span><input type="password" value={authPassword} onChange={(event) => { setAuthPassword(event.target.value); setAuthMessage(""); }} placeholder="輸入 Supabase 帳戶密碼" /></label>{authMessage && <div className="auth-message">{authMessage}</div>}<button className="primary-button" type="submit" disabled={!authEmail.trim() || !authPassword}><KeyRound size={17} /> 用密碼登入</button><button className="secondary-button" type="button" disabled={!authEmail.trim()} onClick={() => void sendMagicLink()}>寄 Magic Link</button></form></section></div>}
 
       {importOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => setImportOpen(false)}><section className="modal import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" title="關閉" onClick={() => setImportOpen(false)}><X size={18} /></button><div className="modal-icon"><FileUp size={22} /></div><h2 id="import-title">貼上訂單訊息</h2><p>系統會辨認成員、菜單別名、Share、全份及固定數量。確認後會取代目前團購內容。</p><textarea value={importText} autoFocus onChange={(event) => setImportText(event.target.value)} placeholder="在此貼上 WhatsApp 或群組訂單訊息…" />{importPreview && <div className="import-preview"><div><strong>{importPreview.members.length}</strong><span>位成員</span></div><div><strong>{importPreview.requests.length}</strong><span>個要求</span></div><div className={importPreview.unmatchedLines.length ? "has-warning" : ""}><strong>{importPreview.unmatchedLines.length}</strong><span>行未辨認</span></div></div>}{importPreview && importPreview.unmatchedLines.length > 0 && <details className="unmatched"><summary>查看未辨認內容</summary>{importPreview.unmatchedLines.map((line, index) => <div key={`${line}-${index}`}>{line}</div>)}</details>}<div className="modal-actions"><button className="secondary-button" onClick={() => setImportOpen(false)}>取消</button><button className="primary-button" disabled={!importPreview || importPreview.members.length === 0 || importPreview.requests.length === 0} onClick={applyImport}><FileUp size={17} /> 匯入並更新</button></div></section></div>}
     </div>
