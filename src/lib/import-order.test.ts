@@ -39,4 +39,18 @@ Anthony
     expect(result.requests.length).toBeGreaterThanOrEqual(60);
     expect(result.unmatchedLines).toEqual([]);
   });
+
+  it("recognizes Simplified Chinese layer-cake names", () => {
+    const result = parseOrderMessage(`
+Alvin Leung
+红枣姜汁千层糕 $10
+黑芝麻椰汁千层糕 $10
+`, seedGroupBuy);
+
+    expect(result.requests.map((request) => request.itemId)).toEqual([
+      "jujube-ginger-layer-cake",
+      "sesame-layer-cake",
+    ]);
+    expect(result.unmatchedLines).toEqual([]);
+  });
 });
