@@ -439,7 +439,7 @@ export function OrderApp() {
           </div>
           <div className="top-actions">
             <button className="icon-button" title={copied === "link" ? "已複製" : "複製分享連結"} onClick={copyShareLink}><ClipboardCopy size={18} /></button>
-            <button className="secondary-button copy-message" onClick={copySettlementMessage}><ClipboardCopy size={17} /> {copied === "message" ? "已複製" : "複製結算"}</button>
+            <button className="secondary-button copy-message" title={copied === "message" ? "已複製" : "複製結算"} aria-label={copied === "message" ? "已複製結算" : "複製結算"} onClick={copySettlementMessage}><ClipboardCopy size={17} /> {copied === "message" ? "已複製" : "複製結算"}</button>
             <button className="secondary-button shop-copy-message" onClick={copyShopOrderMessage}><ClipboardList size={17} /> {copied === "shop" ? "已複製" : "複製店舖單"}</button>
             {isEditing ? <>
               <button className="icon-button edit-only-action" title="以原始名單重設" onClick={resetSeed}><RotateCcw size={18} /></button>
@@ -455,6 +455,7 @@ export function OrderApp() {
               <summary title="更多操作" aria-label="更多操作"><MoreHorizontal size={20} /></summary>
               <div className="mobile-actions-menu">
                 <button onClick={(event) => { void copyShareLink(); event.currentTarget.closest("details")?.removeAttribute("open"); }}><ClipboardCopy size={17} /> 複製分享連結</button>
+                <button onClick={(event) => { void copySettlementMessage(); event.currentTarget.closest("details")?.removeAttribute("open"); }}><ClipboardCopy size={17} /> 複製結算</button>
                 <button onClick={(event) => { void copyShopOrderMessage(); event.currentTarget.closest("details")?.removeAttribute("open"); }}><ClipboardList size={17} /> 複製店舖單</button>
                 {isEditing && <>
                   <button onClick={(event) => { resetSeed(); event.currentTarget.closest("details")?.removeAttribute("open"); }}><RotateCcw size={17} /> 以原始名單重設</button>
