@@ -25,6 +25,7 @@ import { useEffect, useRef, useState } from "react";
 import { distributeItem } from "@/lib/distribution";
 import { parseOrderMessage } from "@/lib/import-order";
 import { menu, menuById } from "@/lib/menu";
+import { buildShopOrderMessage } from "@/lib/order-messages";
 import { seedGroupBuy } from "@/lib/seed";
 import {
   getSupabase,
@@ -93,7 +94,7 @@ export function OrderApp() {
   const [syncState, setSyncState] = useState<"local" | "loading" | "syncing" | "saved" | "error">("loading");
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState("");
-  const [copied, setCopied] = useState<"message" | "link" | null>(null);
+  const [copied, setCopied] = useState<"message" | "shop" | "link" | null>(null);
   const lastCloudSnapshot = useRef("");
 
   useEffect(() => {
@@ -376,6 +377,12 @@ export function OrderApp() {
     window.setTimeout(() => setCopied(null), 1800);
   }
 
+  async function copyShopOrderMessage() {
+    await navigator.clipboard.writeText(buildShopOrderMessage(groupBuy));
+    setCopied("shop");
+    window.setTimeout(() => setCopied(null), 1800);
+  }
+
   async function copyShareLink() {
     if (!groupBuy.shareToken) {
       setAuthMessage("團購單尚未完成雲端同步，請稍後再試。");
@@ -433,6 +440,7 @@ export function OrderApp() {
           <div className="top-actions">
             <button className="icon-button" title={copied === "link" ? "已複製" : "複製分享連結"} onClick={copyShareLink}><ClipboardCopy size={18} /></button>
             <button className="secondary-button copy-message" onClick={copySettlementMessage}><ClipboardCopy size={17} /> {copied === "message" ? "已複製" : "複製結算"}</button>
+            <button className="secondary-button shop-copy-message" onClick={copyShopOrderMessage}><ClipboardList size={17} /> {copied === "shop" ? "已複製" : "複製店舖單"}</button>
             {isEditing ? <>
               <button className="icon-button edit-only-action" title="以原始名單重設" onClick={resetSeed}><RotateCcw size={18} /></button>
               <button className="secondary-button edit-only-action" onClick={() => setImportOpen(true)}><FileUp size={17} /> 匯入訊息</button>
@@ -447,6 +455,7 @@ export function OrderApp() {
               <summary title="更多操作" aria-label="更多操作"><MoreHorizontal size={20} /></summary>
               <div className="mobile-actions-menu">
                 <button onClick={(event) => { void copyShareLink(); event.currentTarget.closest("details")?.removeAttribute("open"); }}><ClipboardCopy size={17} /> 複製分享連結</button>
+                <button onClick={(event) => { void copyShopOrderMessage(); event.currentTarget.closest("details")?.removeAttribute("open"); }}><ClipboardList size={17} /> 複製店舖單</button>
                 {isEditing && <>
                   <button onClick={(event) => { resetSeed(); event.currentTarget.closest("details")?.removeAttribute("open"); }}><RotateCcw size={17} /> 以原始名單重設</button>
                   <button onClick={(event) => { setImportOpen(true); event.currentTarget.closest("details")?.removeAttribute("open"); }}><FileUp size={17} /> 匯入訊息</button>
