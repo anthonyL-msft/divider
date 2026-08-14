@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseOrderMessage } from "./import-order";
+import { menuById } from "./menu";
 import { seedGroupBuy } from "./seed";
 
 describe("parseOrderMessage", () => {
@@ -104,5 +105,25 @@ Judy
       "hakka-mochi-seaweed-pork-floss",
     ]);
     expect(result.requests.every((request) => request.flavor === undefined)).toBe(true);
+  });
+
+  it("preserves Wing's taro sharing note", () => {
+    const result = parseOrderMessage(`
+Anthony
+糯米糍（芋泥）(share) $10/8個 (wing share 芋泥）
+`, seedGroupBuy);
+
+    expect(result.requests[0]).toMatchObject({
+      itemId: "hakka-mochi-taro",
+      note: "Wing Share 芋泥",
+    });
+  });
+
+  it("models every coconut layer cake as 28 pieces per box", () => {
+    expect([
+      "pandan-layer-cake",
+      "brown-sugar-layer-cake",
+      "sesame-layer-cake",
+    ].map((itemId) => menuById.get(itemId)?.piecesPerPackage)).toEqual([28, 28, 28]);
   });
 });

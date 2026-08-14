@@ -84,6 +84,12 @@ function flavorFrom(line: string) {
   return found.length > 0 ? found.join("／") : undefined;
 }
 
+function noteFrom(line: string) {
+  if (/可\s*share|可獨食|可独食/i.test(line)) return "可 Share 或獨食";
+  const wingShare = line.match(/wing\s*share\s*(芋泥|花生芝麻|海苔肉[鬆松]|[紅红]豆)?/i);
+  return wingShare ? `Wing Share${wingShare[1] ? ` ${wingShare[1]}` : ""}` : undefined;
+}
+
 export function parseOrderMessage(text: string, current: GroupBuy): ImportResult {
   const members: Member[] = [];
   const requests: OrderRequest[] = [];
@@ -154,7 +160,7 @@ export function parseOrderMessage(text: string, current: GroupBuy): ImportResult
         fixed: amount !== undefined,
         quantity: quantityMatch ? Number(quantityMatch[1]) : undefined,
         flavor: itemId.startsWith("hakka-mochi-") ? undefined : flavorFrom(line),
-        note: /可\s*share|可獨食|可独食/i.test(line) ? "可 Share 或獨食" : undefined,
+        note: noteFrom(line),
       });
     });
   }

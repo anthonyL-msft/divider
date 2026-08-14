@@ -28,11 +28,11 @@ const pieces = (
 });
 
 export const menu: MenuItem[] = [
-  pieces("pandan-layer-cake", "廣式蒸糕", "斑斕椰汁千層糕", 10, 10, "每盒10件"),
-  portion("brown-sugar-layer-cake", "廣式蒸糕", "黑糖椰汁千層糕", 10, "盒"),
+  pieces("pandan-layer-cake", "廣式蒸糕", "斑斕椰汁千層糕", 10, 28, "每盒28件"),
+  pieces("brown-sugar-layer-cake", "廣式蒸糕", "黑糖椰汁千層糕", 10, 28, "每盒28件"),
   portion("jujube-ginger-layer-cake", "廣式蒸糕", "紅棗薑汁千層糕", 10, "盒"),
   portion("thai-tea-layer-cake", "廣式蒸糕", "泰式奶茶千層糕", 10, "盒"),
-  portion("sesame-layer-cake", "廣式蒸糕", "黑芝麻椰汁千層糕", 10, "盒"),
+  pieces("sesame-layer-cake", "廣式蒸糕", "黑芝麻椰汁千層糕", 10, 28, "每盒28件"),
   portion("millet-red-bean-cake", "廣式蒸糕", "小米紅豆糕", 10, "盒"),
   portion("red-bean-coconut-cake", "廣式蒸糕", "紅豆椰汁／牛奶糕", 10, "盒"),
   portion("caramel-water-chestnut-cake", "廣式蒸糕", "焦糖馬蹄糕", 10, "盒"),
