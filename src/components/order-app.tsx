@@ -42,6 +42,24 @@ const money = new Intl.NumberFormat("zh-HK", {
   minimumFractionDigits: 2,
 });
 
+async function writeClipboardText(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return;
+  } catch {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    const copied = document.execCommand("copy");
+    textarea.remove();
+    if (!copied) throw new Error("Clipboard access denied");
+  }
+}
+
 type View = "items" | "members" | "menu";
 
 function fractionLabel(value: number) {
@@ -372,15 +390,21 @@ export function OrderApp() {
       });
       lines.push(`合計：${money.format(memberTotals.get(member.id) ?? 0)}`, "");
     });
-    await navigator.clipboard.writeText(lines.join("\n").trim());
-    setCopied("message");
-    window.setTimeout(() => setCopied(null), 1800);
+    await copyText(lines.join("\n").trim(), "message");
   }
 
   async function copyShopOrderMessage() {
-    await navigator.clipboard.writeText(buildShopOrderMessage(groupBuy));
-    setCopied("shop");
-    window.setTimeout(() => setCopied(null), 1800);
+    await copyText(buildShopOrderMessage(groupBuy), "shop");
+  }
+
+  async function copyText(text: string, type: "message" | "shop" | "link") {
+    try {
+      await writeClipboardText(text);
+      setCopied(type);
+      window.setTimeout(() => setCopied(null), 1800);
+    } catch {
+      window.alert("無法自動複製，請檢查瀏覽器的剪貼簿權限後再試。");
+    }
   }
 
   async function copyShareLink() {
@@ -391,9 +415,7 @@ export function OrderApp() {
     const url = new URL(window.location.origin + window.location.pathname);
     url.searchParams.set("group", groupBuy.id);
     url.searchParams.set("token", groupBuy.shareToken);
-    await navigator.clipboard.writeText(url.toString());
-    setCopied("link");
-    window.setTimeout(() => setCopied(null), 1800);
+    await copyText(url.toString(), "link");
   }
 
   const filteredAllocations = allocations.filter((allocation) => {
