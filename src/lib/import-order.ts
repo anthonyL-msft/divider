@@ -71,7 +71,7 @@ function fixedAmount(line: string, itemId: string) {
   const withoutPackagePrice = line.replace(/\$?\s*\d+\s*\/\s*\d+\s*(?:個|个|件)/gi, "");
   const pieces = withoutPackagePrice.match(/(?:要|想要|可要)?\s*([0-9]+)\s*(?:個|个|件)/i);
   if (pieces) return Number(pieces[1]);
-  if (/半\s*(?:盒|份)/.test(line)) {
+  if (/半\s*(?:盒|份|分)/.test(line)) {
     return item?.unitKind === "piece" ? (item.piecesPerPackage ?? 1) / 2 : 0.5;
   }
   const fraction = line.match(/(?:^|[^0-9])([1-9])\s*\/\s*([1-9])(?![0-9])/i);
@@ -147,6 +147,11 @@ export function parseOrderMessage(text: string, current: GroupBuy): ImportResult
       continue;
     }
     const activeMemberId = activeMember.id;
+    const activeMemberName = activeMember.name;
+    const wingShare = line.match(/wing\s*share(?:\s*([0-9]+)\s*(?:個|个|件))?/i);
+    const wingMember = wingShare
+      ? members.find((member) => member.name.toLowerCase() === "wing")
+      : undefined;
     itemIds.forEach((itemId) => {
       const amount = fixedAmount(line, itemId);
       const share = /share|可\s*share|可獨食|可独食/i.test(line) || defaultShare || amount !== undefined;
@@ -162,6 +167,18 @@ export function parseOrderMessage(text: string, current: GroupBuy): ImportResult
         flavor: itemId.startsWith("hakka-mochi-") ? undefined : flavorFrom(line),
         note: noteFrom(line),
       });
+      if (wingMember && wingMember.id !== activeMemberId) {
+        const wingAmount = wingShare?.[1] ? Number(wingShare[1]) : undefined;
+        requests.push({
+          id: `import-${Date.now()}-${++requestIndex}`,
+          memberId: wingMember.id,
+          itemId,
+          mode: "share",
+          minimum: wingAmount,
+          fixed: wingAmount !== undefined,
+          note: `與 ${activeMemberName} Share`,
+        });
+      }
     });
   }
 

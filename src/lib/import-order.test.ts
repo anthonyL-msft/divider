@@ -126,4 +126,29 @@ Anthony
       "sesame-layer-cake",
     ].map((itemId) => menuById.get(itemId)?.piecesPerPackage)).toEqual([28, 28, 28]);
   });
+
+  it("creates Wing's embedded shares and accepts 半分 as half", () => {
+    const result = parseOrderMessage(`
+wing
+芋泥糯米糍 share
+Susan
+全部可以share
+沙翁 $15（想要2個）(wing share 4個）
+朱古力榛子糯米糍 $15(wing share)
+Michelle
+滷水鴨翼（share 半分）$12
+`, seedGroupBuy);
+
+    expect(result.members.map((member) => member.name)).toEqual(["wing", "Susan", "Michelle"]);
+    expect(result.requests.filter((request) => request.memberId === "wing")).toMatchObject([
+      { itemId: "hakka-mochi-taro", mode: "share" },
+      { itemId: "sa-yung", mode: "share", minimum: 4, fixed: true },
+      { itemId: "chocolate-mochi", mode: "share", minimum: undefined, fixed: false },
+    ]);
+    expect(result.requests.find((request) => request.memberId === "michelle")).toMatchObject({
+      itemId: "duck-wing",
+      minimum: 0.5,
+      fixed: true,
+    });
+  });
 });
