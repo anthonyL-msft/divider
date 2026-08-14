@@ -167,6 +167,40 @@ export function OrderApp() {
   }, [groupBuys, hydrated]);
 
   useEffect(() => {
+    if (!hydrated) return;
+    const params = new URLSearchParams(window.location.search);
+    const sharedId = params.get("group");
+    const shareToken = params.get("token");
+    if (!sharedId || !shareToken) return;
+
+    const refreshSharedGroup = async () => {
+      try {
+        const shared = await loadSharedGroupBuy(sharedId, shareToken);
+        if (!shared) return;
+        setGroupBuys((current) => {
+          const existing = current.find((group) => group.id === shared.id);
+          return existing?.updatedAt === shared.updatedAt ? current : [shared];
+        });
+        setSyncState("saved");
+      } catch {
+        // Keep the last loaded copy available during temporary network failures.
+      }
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void refreshSharedGroup();
+    };
+    const refreshOnFocus = () => void refreshSharedGroup();
+    const interval = window.setInterval(() => void refreshSharedGroup(), 15_000);
+    window.addEventListener("focus", refreshOnFocus);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshOnFocus);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [hydrated]);
+
+  useEffect(() => {
     if (!hydrated || !userId) return;
     const snapshot = JSON.stringify(groupBuys);
     if (snapshot === lastCloudSnapshot.current) return;
