@@ -50,13 +50,14 @@ function slug(name: string) {
 
 function fixedAmount(line: string, itemId: string) {
   const item = menuById.get(itemId);
-  const fraction = line.match(/(?:要|想要|可要|share\s*)?([1-9])\s*\/\s*([1-9])/i);
-  if (fraction) return Number(fraction[1]) / Number(fraction[2]);
+  const withoutPackagePrice = line.replace(/\$?\s*\d+\s*\/\s*\d+\s*(?:個|个|件)/gi, "");
+  const pieces = withoutPackagePrice.match(/(?:要|想要|可要)?\s*([0-9]+)\s*(?:個|个|件)/i);
+  if (pieces) return Number(pieces[1]);
   if (/半\s*(?:盒|份)/.test(line)) {
     return item?.unitKind === "piece" ? (item.piecesPerPackage ?? 1) / 2 : 0.5;
   }
-  const pieces = line.match(/(?:要|想要|可要)\s*([0-9]+)\s*(?:個|个|件)/i);
-  return pieces ? Number(pieces[1]) : undefined;
+  const fraction = line.match(/(?:^|[^0-9])([1-9])\s*\/\s*([1-9])(?![0-9])/i);
+  return fraction ? Number(fraction[1]) / Number(fraction[2]) : undefined;
 }
 
 function flavorFrom(line: string) {
@@ -120,8 +121,8 @@ export function parseOrderMessage(text: string, current: GroupBuy): ImportResult
       unmatchedLines.push(line);
       continue;
     }
-    const share = /share|可\s*share|可獨食|可独食/i.test(line) || defaultShare;
     const amount = fixedAmount(line, itemId);
+    const share = /share|可\s*share|可獨食|可独食/i.test(line) || defaultShare || amount !== undefined;
     const quantityMatch = line.match(/[x×]\s*([0-9]+)/i);
     requests.push({
       id: `import-${Date.now()}-${++requestIndex}`,

@@ -53,4 +53,29 @@ Alvin Leung
     ]);
     expect(result.unmatchedLines).toEqual([]);
   });
+
+  it("distinguishes fixed pieces and partial boxes from package prices", () => {
+    const result = parseOrderMessage(`
+Judy
+北方鮮肉包子（share）想要2個 $15/8個
+Sakura
+沙翁(Share) 4個 $15/8個
+滷水鴨翼（半盒）$12
+Michelle
+沙翁（Share）$15/8個
+`, seedGroupBuy);
+
+    expect(result.requests.map(({ memberId, itemId, mode, minimum, fixed }) => ({
+      memberId,
+      itemId,
+      mode,
+      minimum,
+      fixed,
+    }))).toEqual([
+      { memberId: "judy", itemId: "pork-bun", mode: "share", minimum: 2, fixed: true },
+      { memberId: "sakura", itemId: "sa-yung", mode: "share", minimum: 4, fixed: true },
+      { memberId: "sakura", itemId: "duck-wing", mode: "share", minimum: 0.5, fixed: true },
+      { memberId: "michelle", itemId: "sa-yung", mode: "share", minimum: undefined, fixed: false },
+    ]);
+  });
 });
