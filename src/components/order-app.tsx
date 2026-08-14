@@ -13,6 +13,7 @@ import {
   LogOut,
   Menu as MenuIcon,
   Minus,
+  MoreHorizontal,
   Plus,
   RotateCcw,
   Search,
@@ -441,6 +442,18 @@ export function OrderApp() {
               </button>
               <button className="icon-button" title="離開編輯" onClick={lockEditing}><LogOut size={18} /></button>
             </> : <button className="primary-button" onClick={() => setLoginOpen(true)}><KeyRound size={17} /> 登入編輯</button>}
+            <details className="mobile-actions">
+              <summary title="更多操作" aria-label="更多操作"><MoreHorizontal size={20} /></summary>
+              <div className="mobile-actions-menu">
+                <button onClick={(event) => { void copyShareLink(); event.currentTarget.closest("details")?.removeAttribute("open"); }}><ClipboardCopy size={17} /> 複製分享連結</button>
+                {isEditing && <>
+                  <button onClick={(event) => { resetSeed(); event.currentTarget.closest("details")?.removeAttribute("open"); }}><RotateCcw size={17} /> 以原始名單重設</button>
+                  <button onClick={(event) => { setImportOpen(true); event.currentTarget.closest("details")?.removeAttribute("open"); }}><FileUp size={17} /> 匯入訊息</button>
+                  <button onClick={(event) => { createGroupBuy(); event.currentTarget.closest("details")?.removeAttribute("open"); }}><Plus size={17} /> 新團購</button>
+                  <button onClick={(event) => { void lockEditing(); event.currentTarget.closest("details")?.removeAttribute("open"); }}><LogOut size={17} /> 離開編輯</button>
+                </>}
+              </div>
+            </details>
           </div>
         </header>
 
